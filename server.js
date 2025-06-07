@@ -38,23 +38,38 @@ app.post("/get-nonce", (req, res) => {
 
 // Rota para verificar assinatura
 app.post("/verify-signature", (req, res) => {
-  const { wallet, signature } = req.body;
-
-  if (!wallet || !signature) return res.status(400).json({ error: "Dados incompletos." });
-
-  const nonce = nonces[wallet.toLowerCase()];
-  if (!nonce) return res.status(400).json({ error: "Nonce não encontrado." });
+app.post("/verify-signature", async (req, res) => {
+  const { wallet, signature, originalNonce } = req.body;
+  
+  if (!wallet || !signature || !originalNonce) {
+    return res.status(400).json({ 
+      success: false,
+      error: "Dados incompletos" 
+    });
+  }
 
   try {
-    const recoveredAddress = ethers.utils.verifyMessage(nonce, signature);
+    const recoveredAddress = ethers.utils.verifyMessage(
+      originalNonce, 
+      signature
+    );
 
     if (recoveredAddress.toLowerCase() === wallet.toLowerCase()) {
-      return res.json({ success: true });
+      res.json({ 
+        success: true,
+        message: "Assinatura válida" 
+      });
     } else {
-      return res.status(401).json({ success: false, error: "Assinatura inválida." });
+      res.status(401).json({
+        success: false,
+        error: "Endereço recuperado não corresponde"
+      });
     }
   } catch (error) {
-    return res.status(400).json({ error: "Erro ao verificar assinatura." });
+    res.status(400).json({
+      success: false,
+      error: "Erro na verificação: " + error.message
+    });
   }
 });
 
