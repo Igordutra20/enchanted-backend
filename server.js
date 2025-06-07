@@ -10,12 +10,13 @@ const PORT = process.env.PORT || 3000;
 // Configuração do CORS (permitir apenas seu frontend)
 const corsOptions = {
   origin: [
-    'https://igordutra20.github.io', // Seu GitHub Pages
-    'http://localhost:3000'          // Para desenvolvimento
+    'https://enchantedlegends.online',     // Novo domínio
+    'https://www.enchantedlegends.online', // Se usar www
+    'https://igordutra20.github.io',       // Mantenha se ainda usa
+    'http://localhost:3000'                // Para desenvolvimento
   ],
   methods: ['GET', 'POST']
 };
-
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
