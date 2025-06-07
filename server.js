@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
@@ -6,16 +7,21 @@ const { ethers } = require("ethers");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// Configuração do CORS (permitir apenas seu frontend)
+const corsOptions = {
+  origin: [
+    'https://igordutra20.github.io', // Seu GitHub Pages
+    'http://localhost:3000'          // Para desenvolvimento
+  ],
+  methods: ['GET', 'POST']
+};
+
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
-const nonces = {};  // Armazena nonces temporariamente
-const users = {};   // Armazena usuários em memória
-
-// Gera nonce aleatório
-function generateNonce() {
-  return "Assine para se autenticar: " + Math.floor(Math.random() * 1000000);
-}
+// Armazenamento em memória (substitua por um banco de dados em produção)
+const nonces = {};
+const users = {};
 
 // Rota para obter nonce
 app.post("/get-nonce", (req, res) => {
@@ -23,13 +29,13 @@ app.post("/get-nonce", (req, res) => {
 
   if (!wallet) return res.status(400).json({ error: "Carteira não enviada." });
 
-  const nonce = generateNonce();
+  const nonce = `Assine para se autenticar: ${Math.random().toString(36).substring(2)}`;
   nonces[wallet.toLowerCase()] = nonce;
 
   res.json({ nonce });
 });
 
-// Rota para verificar a assinatura
+// Rota para verificar assinatura
 app.post("/verify-signature", (req, res) => {
   const { wallet, signature } = req.body;
 
@@ -51,7 +57,7 @@ app.post("/verify-signature", (req, res) => {
   }
 });
 
-// Rota para registrar usuário após autenticação
+// Rota para registrar usuário
 app.post("/register", (req, res) => {
   const { wallet, username, email } = req.body;
 
@@ -64,16 +70,9 @@ app.post("/register", (req, res) => {
   res.json({ success: true, user: { wallet, username, email } });
 });
 
-// (Opcional) Ver perfil do usuário
-app.get("/user/:wallet", (req, res) => {
-  const wallet = req.params.wallet.toLowerCase();
-  const user = users[wallet];
-
-  if (user) {
-    res.json({ user });
-  } else {
-    res.status(404).json({ error: "Usuário não encontrado." });
-  }
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ status: "OK" });
 });
 
 app.listen(PORT, () => {
