@@ -7,20 +7,20 @@ const { ethers } = require("ethers");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuração do CORS (permitir apenas seu frontend)
+// Configuração do CORS
 const corsOptions = {
   origin: [
-    'https://enchantedlegends.online',     // Novo domínio
-    'https://www.enchantedlegends.online', // Se usar www
-    'https://igordutra20.github.io',       // Mantenha se ainda usa
-    'http://localhost:3000'                // Para desenvolvimento
+    'https://enchantedlegends.online',
+    'https://www.enchantedlegends.online',
+    'https://igordutra20.github.io',
+    'http://localhost:3000'
   ],
   methods: ['GET', 'POST']
 };
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
-// Armazenamento em memória (substitua por um banco de dados em produção)
+// Armazenamento em memória
 const nonces = {};
 const users = {};
 
@@ -30,14 +30,16 @@ app.post("/get-nonce", (req, res) => {
 
   if (!wallet) return res.status(400).json({ error: "Carteira não enviada." });
 
-  const nonce = `Assine para se autenticar: ${Math.random().toString(36).substring(2)}`;
-  nonces[wallet.toLowerCase()] = nonce;
+  const nonce = `Assine para se autenticar: ${ethers.utils.hexlify(ethers.utils.randomBytes(32))}`;
+  nonces[wallet.toLowerCase()] = {
+    value: nonce,
+    expiresAt: Date.now() + 300000 // Expira em 5 minutos
+  };
 
   res.json({ nonce });
 });
 
-// Rota para verificar assinatura
-app.post("/verify-signature", (req, res) => {
+// Rota para verificar assinatura (CORRIGIDA - removida a duplicação)
 app.post("/verify-signature", async (req, res) => {
   const { wallet, signature, originalNonce } = req.body;
   
@@ -49,12 +51,29 @@ app.post("/verify-signature", async (req, res) => {
   }
 
   try {
+    // Verifica se o nonce existe e não expirou
+    const storedNonce = nonces[wallet.toLowerCase()];
+    if (!storedNonce || storedNonce.value !== originalNonce) {
+      return res.status(400).json({
+        success: false,
+        error: "Nonce inválido ou expirado"
+      });
+    }
+
+    if (Date.now() > storedNonce.expiresAt) {
+      return res.status(400).json({
+        success: false,
+        error: "Nonce expirado"
+      });
+    }
+
     const recoveredAddress = ethers.utils.verifyMessage(
       originalNonce, 
       signature
     );
 
     if (recoveredAddress.toLowerCase() === wallet.toLowerCase()) {
+      delete nonces[wallet.toLowerCase()]; // Remove o nonce usado
       res.json({ 
         success: true,
         message: "Assinatura válida" 
@@ -66,6 +85,7 @@ app.post("/verify-signature", async (req, res) => {
       });
     }
   } catch (error) {
+    console.error("Erro na verificação:", error);
     res.status(400).json({
       success: false,
       error: "Erro na verificação: " + error.message
@@ -81,14 +101,35 @@ app.post("/register", (req, res) => {
     return res.status(400).json({ error: "Dados incompletos." });
   }
 
-  users[wallet.toLowerCase()] = { username, email };
+  // Validação básica de email
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "Email inválido." });
+  }
 
-  res.json({ success: true, user: { wallet, username, email } });
+  users[wallet.toLowerCase()] = { 
+    username, 
+    email,
+    createdAt: new Date().toISOString()
+  };
+
+  res.json({ 
+    success: true, 
+    user: { wallet: wallet.toLowerCase(), username, email } 
+  });
 });
 
 // Health check
 app.get("/health", (req, res) => {
-  res.json({ status: "OK" });
+  res.status(200).json({ 
+    status: "OK",
+    usersCount: Object.keys(users).length
+  });
+});
+
+// Tratamento de erros global
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: "Erro interno do servidor" });
 });
 
 app.listen(PORT, () => {
